@@ -1,30 +1,54 @@
 
+import { db } from '../db';
+import { pagesTable } from '../db/schema';
 import { type UpdatePageInput, type Page } from '../schema';
+import { eq } from 'drizzle-orm';
 
-/**
- * Updates an existing page using the edit secret for authentication.
- * This handler should:
- * 1. Verify the edit secret exists and is valid
- * 2. Update only the provided fields in the database
- * 3. Update the updated_at timestamp
- * 4. Return the updated page data
- * 5. Throw an error if the edit secret is invalid
- */
 export const updatePage = async (input: UpdatePageInput): Promise<Page> => {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is updating an existing page using the edit secret.
-    console.log(`Updating page with edit secret: ${input.edit_secret}`);
-    
-    // Placeholder return - should update database and return actual page
-    return Promise.resolve({
-        id: 1, // Placeholder ID
-        title: input.title || 'Updated Title',
-        content: input.content || 'Updated content',
-        hero_image_url: input.hero_image_url || null,
-        theme: input.theme || 'light',
-        public_slug: 'placeholder_slug',
-        edit_secret: input.edit_secret,
-        created_at: new Date(),
-        updated_at: new Date()
-    } as Page);
+  try {
+    // First, verify the edit secret exists and get the page
+    const existingPages = await db.select()
+      .from(pagesTable)
+      .where(eq(pagesTable.edit_secret, input.edit_secret))
+      .execute();
+
+    if (existingPages.length === 0) {
+      throw new Error('Invalid edit secret');
+    }
+
+    const existingPage = existingPages[0];
+
+    // Build update object with only provided fields
+    const updateData: Partial<typeof pagesTable.$inferInsert> = {
+      updated_at: new Date() // Use new Date() instead of sql`NOW()`
+    };
+
+    if (input.title !== undefined) {
+      updateData.title = input.title;
+    }
+
+    if (input.content !== undefined) {
+      updateData.content = input.content;
+    }
+
+    if (input.hero_image_url !== undefined) {
+      updateData.hero_image_url = input.hero_image_url;
+    }
+
+    if (input.theme !== undefined) {
+      updateData.theme = input.theme;
+    }
+
+    // Update the page
+    const result = await db.update(pagesTable)
+      .set(updateData)
+      .where(eq(pagesTable.edit_secret, input.edit_secret))
+      .returning()
+      .execute();
+
+    return result[0];
+  } catch (error) {
+    console.error('Page update failed:', error);
+    throw error;
+  }
 };

@@ -1,26 +1,42 @@
 
+import { db } from '../db';
+import { pagesTable } from '../db/schema';
 import { type CreatePageInput, type PublishedPageResponse } from '../schema';
+import { nanoid } from 'nanoid';
 
-/**
- * Creates a new page with the provided content and generates unique URLs.
- * This handler should:
- * 1. Generate a unique public slug for the page
- * 2. Generate a unique edit secret for later modifications
- * 3. Persist the page data to the database
- * 4. Return the published page response with public and edit URLs
- */
 export const createPage = async (input: CreatePageInput): Promise<PublishedPageResponse> => {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // Generate unique identifiers for public slug and edit secret
-    const publicSlug = `page_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const editSecret = `edit_${Date.now()}_${Math.random().toString(36).substr(2, 16)}`;
-    
-    // Placeholder response - should save to database and return actual URLs
-    return Promise.resolve({
-        id: 1, // Placeholder ID
-        public_url: `${process.env['CLIENT_URL'] || 'http://localhost:3000'}/${publicSlug}`,
-        edit_url: `${process.env['CLIENT_URL'] || 'http://localhost:3000'}/edit/${editSecret}`,
+  try {
+    // Generate unique identifiers
+    const publicSlug = nanoid(12); // Short, URL-safe identifier
+    const editSecret = nanoid(32); // Longer secret for editing
+
+    // Insert page record
+    const result = await db.insert(pagesTable)
+      .values({
+        title: input.title,
+        content: input.content,
+        hero_image_url: input.hero_image_url || null,
+        theme: input.theme || 'light', // Use Zod default
         public_slug: publicSlug,
         edit_secret: editSecret
-    });
+      })
+      .returning()
+      .execute();
+
+    const page = result[0];
+
+    // Generate URLs
+    const baseUrl = process.env['CLIENT_URL'] || 'http://localhost:3000';
+    
+    return {
+      id: page.id,
+      public_url: `${baseUrl}/${publicSlug}`,
+      edit_url: `${baseUrl}/edit/${editSecret}`,
+      public_slug: publicSlug,
+      edit_secret: editSecret
+    };
+  } catch (error) {
+    console.error('Page creation failed:', error);
+    throw error;
+  }
 };
